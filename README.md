@@ -1,6 +1,9 @@
-# ArcGIS Experience Builder Devops Example
+Forked from [gavinr-maps](https://github.com/gavinr-maps/experience-builder-devops-example), but updated to consolidate dependecies in custom widgets and some other stuff to make it work for me.
 
- Use Experience Builder within a devops workflow to automatically build the app on commit.
+
+
+ON LINE 81 you will have to change your clientID and app number that's found in server/public/apps
+
 
 ## How it works
 
@@ -13,4 +16,5 @@ The built app is deployed to GitHub Pages: https://gavinr-maps.github.io/experie
 
 More information on how the GitHub Action script generates the Experience Builder app export can be found [here](https://community.esri.com/t5/arcgis-experience-builder-blog/experience-builder-devops-generating-the-app/ba-p/1112247).
 
-[![](https://gavinr.github.io/experience-builder-devops-example/screenshot.png)](https://gavinr.github.io/experience-builder-devops-example/)
+
+

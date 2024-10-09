@@ -2,7 +2,7 @@ name: Build and Deploy
 on:
   push:
     branches:
-      - master
+      - main
 
 jobs:
   Build-and-Deploy:
@@ -19,18 +19,55 @@ jobs:
         run: curl -o exb.zip "$(curl -s 'https://downloads.arcgis.com/dms/rest/download/secured/arcgis-experience-builder-1.15.zip?f=json&folder=software%2FExperienceBuilder%2F1.15' | python3 -c "import sys, json; print(json.load(sys.stdin)['url'])")"
       - name: Unzip Experience Builder
         run: unzip -q exb.zip -d exb
-      - name: Copy Custom Widgets
-        run: cp -r widgets/* exb/ArcGISExperienceBuilder/client/your-extensions/widgets
-      - name: Copy Custom Themes
-        run: cp -r themes/* exb/ArcGISExperienceBuilder/client/your-extensions/themes
-      - name: Create App directory
-        run: mkdir public && cd public && mkdir apps && cd apps
-        working-directory: exb/ArcGISExperienceBuilder/server
+      - name: Make Widgets folder
+        run: mkdir widgets
+      - name: List contents of current directory
+        run: ls -la
+      - name: Copy Custom Widgets (if exists)
+        run: cp -r client/your-extensions/widgets/* exb/ArcGISExperienceBuilder/client/your-extensions/widgets
+      - name: Install widget dependencies
+        run: |
+          cd exb/ArcGISExperienceBuilder/client/your-extensions/widgets
+          for widget in */; do
+            if [ -d "$widget" ] && [ -f "${widget}package.json" ]; then
+              echo "Installing dependencies for $widget"
+              (cd "$widget" && npm install)
+            fi
+          done
+      - name: Create App directory 
+        run: mkdir -p exb/ArcGISExperienceBuilder/server/public/apps
+        #working-directory: exb/ArcGISExperienceBuilder/server/public
+      # - name: Change to App directory 
+      #   run: cd exb/ArcGISExperienceBuilder/server/public/
       - name: Copy apps
-        run: cp -r apps/* exb/ArcGISExperienceBuilder/server/public/apps
+        run: cp -r server/public/apps/* exb/ArcGISExperienceBuilder/server/public/apps/
+      - name: List contents of apps directory
+        run: ls -R exb/ArcGISExperienceBuilder/server/
+      - name: Consolidate Dependencies
+        run: |
+          TARGET_PATH="exb/ArcGISExperienceBuilder/client/package.json"
+          TARGET_JSON=$(cat "$TARGET_PATH")
+          
+          CONSOLIDATED_DEPS="{}"
+          
+          for WIDGET_PATH in exb/ArcGISExperienceBuilder/client/your-extensions/widgets/; do
+            if [ -f "${WIDGET_PATH}package.json" ]; then
+              WIDGET_DEPS=$(jq -r '.dependencies // {}' "${WIDGET_PATH}package.json")
+              
+              CONSOLIDATED_DEPS=$(echo "$CONSOLIDATED_DEPS" "$WIDGET_DEPS" | jq -s '.[0] * .[1]')
+            fi
+          done
+          
+          NEW_TARGET_JSON=$(echo "$TARGET_JSON" | jq --argjson deps "$CONSOLIDATED_DEPS" '.dependencies = (.dependencies // {}) * $deps')
+          echo "$NEW_TARGET_JSON" > "$TARGET_PATH"
+          
+          echo "Dependencies consolidated successfully"
       - name: NPM install client folder
-        run: npm ci
+        run: npm install
         working-directory: exb/ArcGISExperienceBuilder/client
+      - name: NPM install widget
+        run: npm install
+        working-directory: exb/ArcGISExperienceBuilder/client/your-extensions/widgets/
       - name: NPM install in server folder
         run: npm ci
         working-directory: exb/ArcGISExperienceBuilder/server
@@ -41,25 +78,19 @@ jobs:
         run: npm run build:prod
         working-directory: exb/ArcGISExperienceBuilder/client
       - name: Run download script
-        run: node -e "require('./server/src/middlewares/dev/apps/app-download.js').zipApp('0', 'app.zip')"
+        run: node -e "require('./server/src/middlewares/dev/apps/app-download.js').zipApp('number', 'app.zip', 'clientid')"
         working-directory: exb/ArcGISExperienceBuilder
         env:
           NODE_ENV: production
+      - name: List contents of current directory
+        run: ls -la
+        working-directory: exb/ArcGISExperienceBuilder
       - name: Unzip app zip
         # ExB has non-standard file permissions so use chmod after unzip
         run: |
-          unzip -q app.zip -d app
-          chmod -R 777 app
+         unzip -q app.zip -d app
+         chmod -R 777 app
         working-directory: exb/ArcGISExperienceBuilder
-      # - name: Generate screeenshot (optional)
-      #   working-directory: exb/ArcGISExperienceBuilder/app
-      #   continue-on-error: true
-      #   run: |
-      #     npm install --global pageres-cli
-      #     npm install --global serve
-      #     echo "{\"trailingSlash\":true}" > serve.json
-      #     serve . -p 5000 &
-      #     pageres http://localhost:5000/index.html 1024x768 --filename=screenshot --delay=15
       - name: Deploy app zip to GH Pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:
