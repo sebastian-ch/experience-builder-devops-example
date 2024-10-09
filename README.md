@@ -4,6 +4,7 @@ Forked from [gavinr-maps](https://github.com/gavinr-maps/experience-builder-devo
 
 ON LINE 81 you will have to change your clientID and app number that's found in server/public/apps
 
+use the gitignore if you want to deploy from your dev setup
 
 ## How it works
 
